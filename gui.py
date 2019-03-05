@@ -1,6 +1,6 @@
 from tkinter import *
 import pyvjoy
-from PIL import ImageTk, Image, ImageEnhance, ImageFilter
+from PIL import ImageTk, Image, ImageEnhance, ImageFilter, ImageGrab
 from pywinauto import Application
 import win32gui, win32ui, win32con, win32api, pyautogui, pywinauto
 import time
@@ -8,7 +8,6 @@ import time
 class GUI:
     def __init__(self):
         self.scale = 3;
-        self.game = 'RetroArch Genesis Plus GX v1.7.4 f5eed51'
         self.root = Tk()
         self.root.title = "Title"
         self.root.resizable(0,0)
@@ -43,8 +42,21 @@ class GUI:
         button_c.bind("<ButtonPress>", self.action_c_press)
         button_c.bind("<ButtonRelease>", self.action_c_release)
         button_c.place(x=260*self.scale, y=330*self.scale)
-
         self.gamepad = pyvjoy.VJoyDevice(1)
+
+        self.games_list = ['RetroArch Genesis Plus GX v1.7.4 f5eed51', 'SomethingElse']
+        for game in self.games_list :
+            self.hwnd = win32gui.FindWindow(None, game)
+            if (self.hwnd != 0) :
+                self.self = win32gui.FindWindow(None, "tk")
+                windowcor = win32gui.GetWindowRect(self.hwnd)
+                self.w = windowcor[2] - windowcor[0]
+                self.h = windowcor[3] - windowcor[1]
+                wDC = win32gui.GetWindowDC(self.hwnd)
+                self.dcObj = win32ui.CreateDCFromHandle(wDC)
+                self.cDC = self.dcObj.CreateCompatibleDC()
+                self.game = game
+                break
 
     def action_right_press(self, event):
         self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x8000)
@@ -82,29 +94,22 @@ class GUI:
         self.gamepad.set_button(3, 0)
 
     def draw(self):
-        self.hwnd = win32gui.FindWindow(None, self.game)
-        self.self = win32gui.FindWindow(None, "tk")
-        windowcor = win32gui.GetWindowRect(self.hwnd)
-        w = windowcor[2] - windowcor[0]
-        h = windowcor[3] - windowcor[1]
-        wDC = win32gui.GetWindowDC(self.hwnd)
-        dcObj = win32ui.CreateDCFromHandle(wDC)
-        cDC = dcObj.CreateCompatibleDC()
-        self.dataBitMap = win32ui.CreateBitmap()
-        self.dataBitMap.CreateCompatibleBitmap(dcObj, w, h)
-        cDC.SelectObject(self.dataBitMap)
-        cDC.BitBlt((0,-86), (w, h), dcObj, (0,0), win32con.SRCCOPY)
+        if (self.hwnd != 0) :
+            self.dataBitMap = win32ui.CreateBitmap()
+            self.dataBitMap.CreateCompatibleBitmap(self.dcObj, self.w, self.h)
+            self.cDC.SelectObject(self.dataBitMap)
+            self.cDC.BitBlt((0,-86), (self.w, self.h), self.dcObj, (0,0), win32con.SRCCOPY)
+            bmpinfo = self.dataBitMap.GetInfo()
+            bmpstr = self.dataBitMap.GetBitmapBits(True)
+            self.img_source = Image.frombuffer(
+                'RGB',
+                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+                bmpstr, 'raw', 'BGRX', 0, 1)
+            self.img_main_orig = self.img_source
+        else :
+            self.img_main_orig = ImageGrab.grab(bbox=(0, 0, 800, 600)).resize((400, 300), Image.ANTIALIAS)
 
-        bmpinfo = self.dataBitMap.GetInfo()
-        bmpstr = self.dataBitMap.GetBitmapBits(True)
-        self.img_source = Image.frombuffer(
-            'RGB',
-            (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
-            bmpstr, 'raw', 'BGRX', 0, 1)
-
-        self.img_main_orig = self.img_source
         self.img_main_orig = self.img_main_orig.resize((400*self.scale, 300*self.scale), Image.ANTIALIAS)
-        #self.img_main_orig = ImageGrab.grab(bbox=(0, 0, 800, 600)).resize((400, 300), Image.ANTIALIAS)
         self.img_main = ImageTk.PhotoImage(self.img_main_orig)
         self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.img_main)
 
