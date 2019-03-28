@@ -10,16 +10,22 @@ import numpy
 
 class GUI:
     def __init__(self):
+        # Scale GUI by constant factor, used for different DPI screens
         self.scale = 2;
+
+        #Initialize Gui Components
         self.root = Tk()
-        self.root.title = "Title"
+        self.root.title = "SelfDrivingAi"
         self.root.resizable(0,0)
-        #self.root.wm_attributes("-topmost", 1)
         self.canvas = Canvas(self.root, width = 800*self.scale, height = 400*self.scale, bd = 1, highlightthickness = 0)
         self.canvas.pack()
+
+        #Initialize output variables
         self.image_out = False;
         self.image_out_time = 0;
         self.image_out_count = 0;
+
+        #Initialize Buttons
         self.button_image_out = Button(self.root, text="ImageOut = No", command=self.action_image_out)
         self.button_image_out.place(x=400*self.scale, y=330*self.scale)
         button_right = Button(self.root, text=">")
@@ -50,8 +56,14 @@ class GUI:
         button_c.bind("<ButtonPress>", self.action_c_press)
         button_c.bind("<ButtonRelease>", self.action_c_release)
         button_c.place(x=260*self.scale, y=330*self.scale)
+        button_start = Button(self.root, text="start")
+        button_start.bind("<ButtonPress>", self.action_start_press)
+        button_start.bind("<ButtonRelease>", self.action_start_release)
+        button_start.place(x=220 * self.scale, y=300 * self.scale)
         self.gamepad = pyvjoy.VJoyDevice(1)
 
+        # Find game from list of valid window titles
+        # If no game found then gui will use a screengrab of the display
         self.games_list = ['RetroArch Genesis Plus GX v1.7.4 f5eed51', 'SomethingElse']
         for game in self.games_list :
             self.hwnd = win32gui.FindWindow(None, game)
@@ -101,6 +113,11 @@ class GUI:
     def action_c_release(self, event):
         self.gamepad.set_button(3, 0)
 
+    def action_start_press(self, event):
+        self.gamepad.set_button(4, 1)
+    def action_start_release(self, event):
+        self.gamepad.set_button(4, 0)
+
     def action_image_out(self):
         if self.image_out :
             self.button_image_out.configure(text="ImageOut = No")
@@ -109,8 +126,9 @@ class GUI:
             self.button_image_out.configure(text="ImageOut = Yes")
             self.image_out = True
 
-
+    # take screenshot of game, run filters on image and display it. Repeat
     def draw(self):
+        # if compatible game running take screenshot of it.
         if (self.hwnd != 0) :
             self.dataBitMap = win32ui.CreateBitmap()
             self.dataBitMap.CreateCompatibleBitmap(self.dcObj, self.w, self.h)
@@ -123,16 +141,18 @@ class GUI:
                 (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
                 bmpstr, 'raw', 'BGRX', 0, 1)
             self.img_main_orig = self.img_source
+        # no game running, use screencrab
         else :
             self.img_main_orig = ImageGrab.grab(bbox=(0, 0, 800, 600)).resize((400, 300), Image.ANTIALIAS)
 
+        # Display main image and store backup
         self.img_main_orig = self.img_main_orig.resize((400*self.scale, 300*self.scale), Image.ANTIALIAS)
         self.img_main = ImageTk.PhotoImage(self.img_main_orig)
         self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.img_main)
 
+        # apply filter to backup
         self.img_cont_thresh = ImageEnhance.Contrast(self.img_main_orig).enhance(10.0)
         self.img_cont_thresh = self.img_cont_thresh.convert('1')
-        print(self.direction(self.img_cont_thresh))
         '''
         self.img_small_orig = self.img_main_orig.resize((200*self.scale, 150*self.scale), Image.ANTIALIAS)
 
@@ -155,6 +175,7 @@ class GUI:
         self.id = self.canvas.create_image(600*self.scale, 150*self.scale, anchor=NW, image=self.img_contrast_enhanced)
         '''
 
+        # if image_out button is checked save filtered image as incremented image files
         if (self.image_out) :
             if (self.image_out_time == 3) :
                 #out = self.img_main_orig
@@ -169,6 +190,7 @@ class GUI:
 
         self.canvas.after(50, self.draw)
 
+    # will be rewritten
     def direction(self, image):
         image = image.crop((17*self.scale, 0*self.scale, 183*self.scale, 87*self.scale))
         x_width, y_height = image.size
@@ -191,72 +213,56 @@ class GUI:
         else :
             return 2
 
+    # get largest blob from find_blobs on subsection of image source we expect driver to be in
     def find_driver(self, image):
         image = image.crop((130*self.scale, 80*self.scale, 280*self.scale, 174*self.scale))
         image.save("find_driver.jpg")
         self.find_blobs(image)
 
+    # Find contiguous areas of white in image
     def find_blobs(self, image):
         x_width, y_height = image.size
-        pix_val = list(image.getdata())
-        all_blobs = list()
-        # scan image 1 pixel in from top left corner so we can compare left and above
-        for pix_y in range(1, y_height) :
-            line_blobs = list()
-            cur_blob = set()
+        pix_val = numpy.array(image)
+        biggest_blob = set()
+        searched = set()
+        test_range = ((0, 1), (1, 0), (0, 1), (1, 0))
 
-            # traverse row and find contiguous white pixels as blobs
-            last_pixel = 0
-            for pix_x in range(1, x_width) :
-                cur_pixel = (pix_y * x_width) + pix_x
-                left_pixel = cur_pixel - 1
+        for pix_y in range(0, y_height) :
+            for pix_x in range(0, x_width) :
+                pixel = (pix_y, pix_x)
+                if pixel not in searched:
+                    searched.add(pixel)
+                    if pix_val[pixel] == 255 :
+                        explore_queue = list()
+                        explore_queue.append(pixel)
+                        blob = set()
+                        blob.add(pixel)
+                        while explore_queue :
+                            pixel = explore_queue.pop()
+                            for position in test_range:
+                                test_y = int(pixel[0] + position[0])
+                                test_x = int(pixel[1] + position[1])
+                                if test_y < y_height and test_y >= 0 and test_x < x_width and test_x >= 0:
+                                    test_pixel = (test_y, test_x)
+                                    if test_pixel not in searched :
+                                        searched.add(test_pixel)
+                                        if pix_val[test_pixel] == 255:
+                                            explore_queue.append(test_pixel)
+                                            blob.add(test_pixel)
+                        if len(blob) > len(biggest_blob) :
+                            biggest_blob = blob
+        return biggest_blob
 
-                # if current pixel is white
-                if (pix_val[cur_pixel] > 225) :
-                    # and last pixel is white
-                    if (last_pixel > 225) :
-                        print()
-                    #
-                    else :
-                        print()
-                    '''
-                    if (left_pixel in cur_blob or len(cur_blob)) == 0 :
-                        cur_blob.add(cur_pixel)
-                    else :
-                        line_blobs.append(cur_blob.copy())
-                        cur_blob = set()
-                        cur_blob.add(cur_pixel)
-                    '''
-                # current pixel not white, move on with last_pixel black
-                else :
-                    last_pixel = 0
-            # append last blob in row to line_blobs
-            if (len(cur_blob) > 0) :
-                line_blobs.append(cur_blob)
+    # find centre pixel of a blob by average of pixel positions
+    def find_blob_centre(self, blob:set):
+        x_centre = 0
+        y_centre = 0
+        for pixel in blob :
+            y_centre += pixel[0]/len(blob)
+            x_centre += pixel[1]/len(blob)
+        return (int(y_centre), int(x_centre))
 
-            # merge blobs found in line with blobs found so far
-            for line_blob in line_blobs :
-                # extend blob up one pixel
-                test_blob = line_blob.copy()
-                for pixel in line_blob :
-                    test_blob.add(pixel-x_width)
-                new_blob = True
-                for blob in all_blobs :
-                    if len(blob.intersection(test_blob)) > 0 :
-                        blob = blob.union(blob)
-                        new_blob = False
-                if new_blob :
-                    all_blobs.append(line_blob)
-
-            # merge all blobs
-            last_blob = None
-            for blob in all_blobs :
-                if last_blob == None :
-                    last_blob = blob
-                else :
-                    if last_blob >= blob :
-                        all_blobs.remove(blob)
-
+    # Apply threshold to image in a given block size
     def block_threshold(self, image, block_size, threshold):
         pix_val = numpy.array(image)
         for y in range(0, len(pix_val)-(block_size-1), block_size) :
@@ -280,11 +286,15 @@ class GUI:
 
 hwnd=win32gui.GetDesktopWindow()
 gui = GUI()
-gui.draw()
-gui.root.mainloop()
+# gui.draw()
+# gui.root.mainloop()
 
 
-#im = Image.open('img_cont_thresh_5.jpg', 'r')
+im = Image.open('img_cont_thresh_5.jpg', 'r')
+im = im.crop((75, 125, 125, 175))
+im = gui.block_threshold(im, 2, 240)
+im.save('test.jpg')
+gui.find_blobs(im)
 #gui.block_threshold(im, 2, 255).save('test.jpg')
 #gui.find_driver(im)
 #print(gui.direction(im))
