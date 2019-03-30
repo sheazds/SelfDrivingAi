@@ -13,53 +13,60 @@ class GUI:
         # Scale GUI by constant factor, used for different DPI screens
         self.scale = 2;
 
-        #Initialize Gui Components
+        #Initialize Gui Components and size
         self.root = Tk()
-        self.root.title = "SelfDrivingAi"
         self.root.resizable(0,0)
-        self.canvas = Canvas(self.root, width = 800*self.scale, height = 400*self.scale, bd = 1, highlightthickness = 0)
+        self.canvas = Canvas(self.root, width = 400*self.scale, height = 300*self.scale, bd = 1, highlightthickness = 0)
         self.canvas.pack()
 
         #Initialize output variables
-        self.image_out = False;
-        self.image_out_time = 0;
-        self.image_out_count = 0;
+        self.image_out = False
+        self.image_out_time = 0
+        self.image_out_count = 0
 
         #Initialize Buttons
         self.button_image_out = Button(self.root, text="ImageOut = No", command=self.action_image_out)
-        self.button_image_out.place(x=400*self.scale, y=330*self.scale)
+        self.button_image_out.place(x=200*self.scale, y=230*self.scale)
+
         button_right = Button(self.root, text=">")
         button_right.bind("<ButtonPress>", self.action_right_press)
         button_right.bind("<ButtonRelease>", self.action_right_release)
-        button_right.place(x=150*self.scale, y=330*self.scale)
+        button_right.place(x=60*self.scale, y=250*self.scale)
+
         button_up = Button(self.root, text="^")
         button_up.bind("<ButtonPress>", self.action_up_press)
         button_up.bind("<ButtonRelease>", self.action_up_release)
-        button_up.place(x=100*self.scale, y=310*self.scale)
+        button_up.place(x=30*self.scale, y=230*self.scale)
+
         button_left = Button(self.root, text="<")
         button_left.bind("<ButtonPress>", self.action_left_press)
         button_left.bind("<ButtonRelease>", self.action_left_release)
-        button_left.place(x=50*self.scale, y=330*self.scale)
+        button_left.place(x=0*self.scale, y=250*self.scale)
+
         button_down = Button(self.root, text="v")
         button_down.bind("<ButtonPress>", self.action_down_press)
         button_down.bind("<ButtonRelease>", self.action_down_release)
-        button_down.place(x=100*self.scale, y=360*self.scale)
+        button_down.place(x=30*self.scale, y=270*self.scale)
+
         button_a = Button(self.root, text="a")
         button_a.bind("<ButtonPress>", self.action_a_press)
         button_a.bind("<ButtonRelease>", self.action_a_release)
-        button_a.place(x=200*self.scale, y=330*self.scale)
+        button_a.place(x=90*self.scale, y=260*self.scale)
+
         button_b = Button(self.root, text="b")
         button_b.bind("<ButtonPress>", self.action_b_press)
         button_b.bind("<ButtonRelease>", self.action_b_release)
-        button_b.place(x=230*self.scale, y=330*self.scale)
+        button_b.place(x=120*self.scale, y=260*self.scale)
+
         button_c = Button(self.root, text="c")
         button_c.bind("<ButtonPress>", self.action_c_press)
         button_c.bind("<ButtonRelease>", self.action_c_release)
-        button_c.place(x=260*self.scale, y=330*self.scale)
+        button_c.place(x=150*self.scale, y=260*self.scale)
+
         button_start = Button(self.root, text="start")
         button_start.bind("<ButtonPress>", self.action_start_press)
         button_start.bind("<ButtonRelease>", self.action_start_release)
-        button_start.place(x=220 * self.scale, y=300 * self.scale)
+        button_start.place(x=100 * self.scale, y=230 * self.scale)
         self.gamepad = pyvjoy.VJoyDevice(1)
 
         # Find game from list of valid window titles
@@ -136,50 +143,29 @@ class GUI:
             self.cDC.BitBlt((0,-86), (self.w, self.h), self.dcObj, (0,0), win32con.SRCCOPY)
             bmpinfo = self.dataBitMap.GetInfo()
             bmpstr = self.dataBitMap.GetBitmapBits(True)
-            self.img_source = Image.frombuffer(
+            self.img_main = Image.frombuffer(
                 'RGB',
                 (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
                 bmpstr, 'raw', 'BGRX', 0, 1)
-            self.img_main_orig = self.img_source
-        # no game running, use screencrab
+            self.img_main = self.img_main.crop((5*self.scale, 0, 445*self.scale, 225*self.scale))
+            self.img_main = self.img_main.resize((400 * self.scale, 225 * self.scale), Image.ANTIALIAS)
+            #image = image.crop((17 * self.scale, 0 * self.scale, 183 * self.scale, 87 * self.scale))
+        # no game running, use screengrab
         else :
-            self.img_main_orig = ImageGrab.grab(bbox=(0, 0, 800, 600)).resize((400, 300), Image.ANTIALIAS)
+            self.img_main = ImageGrab.grab(bbox=(0, 0, 800, 450)).resize((400*self.scale, 225*self.scale), Image.ANTIALIAS)
 
         # Display main image and store backup
-        self.img_main_orig = self.img_main_orig.resize((400*self.scale, 300*self.scale), Image.ANTIALIAS)
-        self.img_main = ImageTk.PhotoImage(self.img_main_orig)
+        self.img_main = ImageEnhance.Contrast(self.img_main).enhance(10.0)
+        self.img_main = self.img_main.convert('1')
+        #self.img_main = self.block_threshold(self.img_main, 2, 100)
+        self.img_main = ImageTk.PhotoImage(self.img_main)
         self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.img_main)
-
-        # apply filter to backup
-        self.img_cont_thresh = ImageEnhance.Contrast(self.img_main_orig).enhance(10.0)
-        self.img_cont_thresh = self.img_cont_thresh.convert('1')
-        '''
-        self.img_small_orig = self.img_main_orig.resize((200*self.scale, 150*self.scale), Image.ANTIALIAS)
-
-        self.img_threshold_orig = ImageEnhance.Contrast(self.img_small_orig).enhance(-5.0)
-        self.img_threshold_orig = self.img_threshold_orig.convert('1')
-        self.img_threshold = ImageTk.PhotoImage(self.img_threshold_orig)
-        self.id = self.canvas.create_image(400*self.scale, 0, anchor=NW, image=self.img_threshold)
-
-        self.img_grayscale_enhanced = self.img_threshold_orig.filter(ImageFilter.FIND_EDGES)
-        self.img_grayscale_enhanced = ImageTk.PhotoImage(self.img_grayscale_enhanced)
-        self.id = self.canvas.create_image(600*self.scale, 0, anchor=NW, image=self.img_grayscale_enhanced)
-
-        self.img_contrast_orig = ImageEnhance.Contrast(self.img_small_orig).enhance(10.0)
-        self.img_contrast_orig = self.img_contrast_orig.convert('1')
-        self.img_contrast = ImageTk.PhotoImage(self.img_contrast_orig)
-        self.id = self.canvas.create_image(400*self.scale, 150*self.scale, anchor=NW, image=self.img_contrast)
-
-        self.img_contrast_enhanced = self.img_contrast_orig.filter(ImageFilter.FIND_EDGES)
-        self.img_contrast_enhanced = ImageTk.PhotoImage(self.img_contrast_enhanced)
-        self.id = self.canvas.create_image(600*self.scale, 150*self.scale, anchor=NW, image=self.img_contrast_enhanced)
-        '''
 
         # if image_out button is checked save filtered image as incremented image files
         if (self.image_out) :
             if (self.image_out_time == 3) :
                 #out = self.img_main_orig
-                out = ImageEnhance.Contrast(self.img_main_orig).enhance(10.0)
+                out = ImageEnhance.Contrast(self.img_main).enhance(10.0)
                 out = out.convert('1')
                 #out = out.filter(ImageFilter.FIND_EDGES)
                 out.save("img_cont_thresh_" + str(self.image_out_count) + ".jpg")
@@ -263,7 +249,7 @@ class GUI:
         return (int(y_centre), int(x_centre))
 
     # Apply threshold to image in a given block size
-    def block_threshold(self, image, block_size, threshold):
+    def block_threshold(self, image, block_size:int, threshold:int):
         pix_val = numpy.array(image)
         for y in range(0, len(pix_val)-(block_size-1), block_size) :
             for x in range(0, len(pix_val[0])-(block_size-1), 2) :
@@ -273,7 +259,7 @@ class GUI:
                     for block_x in range(0, block_size):
                         block_pixels.append(((y + block_y), (x + block_x)))
                         block_value += pix_val[y + block_y][x + block_x]
-                if (block_value/(block_size*block_size) > threshold/block_size) :
+                if block_value/(block_size*block_size) > threshold :
                     for pixel in block_pixels :
                         pix_val[pixel[0], pixel[1]] = 255
                 else:
@@ -286,15 +272,15 @@ class GUI:
 
 hwnd=win32gui.GetDesktopWindow()
 gui = GUI()
-# gui.draw()
-# gui.root.mainloop()
+gui.draw()
+gui.root.mainloop()
 
 
 im = Image.open('img_cont_thresh_5.jpg', 'r')
 im = im.crop((75, 125, 125, 175))
 im = gui.block_threshold(im, 2, 240)
 im.save('test.jpg')
-gui.find_blobs(im)
+print(str(gui.find_blob_centre(gui.find_blobs(im))))
 #gui.block_threshold(im, 2, 255).save('test.jpg')
 #gui.find_driver(im)
 #print(gui.direction(im))
