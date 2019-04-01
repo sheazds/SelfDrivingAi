@@ -2,11 +2,11 @@ import tkinter as tk
 from tkinter import *
 import pyvjoy
 from PIL import ImageTk, Image, ImageEnhance, ImageDraw, ImageGrab
-from pywinauto import Application
-import win32gui, win32ui, win32con, win32api, pyautogui, pywinauto
-import time
-import copy
+import pywinauto
+import win32gui, win32ui, win32con, win32api
 import numpy
+import threading
+import time
 
 class GUI:
     def __init__(self):
@@ -200,31 +200,31 @@ class GUI:
 
     def drive(self):
         self.find_driver()
-        '''
-        if self.direction_to_centre() == 1 :
-            self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x0)
-        else :
-            self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x8000)
-        '''
         turn_degree = 0
-        if self.driver_pos[0] < 200*self.scale :
-            turn_degree = 200*self.scale - self.driver_pos[0]
+        turn = 0;
+        if self.driver_pos[0] < 200 * self.scale:
+            turn_degree = 200 * self.scale - self.driver_pos[0]
+            turn = 2
+        else:
+            turn_degree = self.driver_pos[0] - 200 * self.scale
+            turn = 1
+        t = threading.Thread(target=self.turn(turn, turn_degree/400))
+        t.start()
+
+
+    def turn(self, direction, length):
+        if(direction == 1) :
             self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x0)
-        else :
-            turn_degree = self.driver_pos[0] - 200*self.scale
+        if(direction == 2):
             self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x8000)
-        print(turn_degree)
-        self.canvas.after(int(turn_degree/10), self.stop_turn())
-
-
-    def stop_turn(self):
+        time.sleep(length)
         self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x4000)
 
     def get_bounding_box(self):
-        bounding_box = (self.driver_pos[0] - (60 + (40 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] - (50 + (27 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[0] + (60 + (40 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] + (50 + (27 * (1 - self.driver_conf)) * self.scale))
+        bounding_box = (self.driver_pos[0] - (60 + (50 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] - (50 + (40 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[0] + (60 + (50 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] + (50 + (40 * (1 - self.driver_conf)) * self.scale))
         return bounding_box
 
     # will be rewritten
@@ -271,7 +271,7 @@ class GUI:
             self.driver_pos = new_pos
         else :
             # couldn't find driver, lower confidence
-            self.confidence = 0.5
+            self.driver_conf = 0
 
     def find_driver_blob(self, blobs):
         driver = set()
@@ -356,5 +356,4 @@ class GUI:
 hwnd=win32gui.GetDesktopWindow()
 gui = GUI()
 gui.draw()
-#gui.direction_to_centre()
 gui.root.mainloop()
