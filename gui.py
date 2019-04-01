@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import *
 import pyvjoy
-from PIL import ImageTk, Image, ImageEnhance, ImageFilter, ImageGrab
+from PIL import ImageTk, Image, ImageEnhance, ImageDraw, ImageGrab
 from pywinauto import Application
 import win32gui, win32ui, win32con, win32api, pyautogui, pywinauto
 import time
@@ -16,17 +16,23 @@ class GUI:
         #Initialize Gui Components and size
         self.root = Tk()
         self.root.resizable(0,0)
-        self.canvas = Canvas(self.root, width = 400*self.scale, height = 300*self.scale, bd = 1, highlightthickness = 0)
+        self.canvas = Canvas(self.root, width = (400*self.scale), height = (300*self.scale), bd = 1, highlightthickness = 0)
         self.canvas.pack()
 
-        #Initialize output variables
+        #Initialize Button toggle variables
+        self.ai_run = False
         self.image_out = False
         self.image_out_time = 0
         self.image_out_count = 0
+        self.driver_pos = (205*self.scale, 155*self.scale)
+        self.driver_conf = 0
 
         #Initialize Buttons
         self.button_image_out = Button(self.root, text="ImageOut = No", command=self.action_image_out)
         self.button_image_out.place(x=200*self.scale, y=230*self.scale)
+
+        self.button_ai_run = Button(self.root, text="Go", command=self.action_ai_run)
+        self.button_ai_run.place(x=200*self.scale, y=260*self.scale)
 
         button_right = Button(self.root, text=">")
         button_right.bind("<ButtonPress>", self.action_right_press)
@@ -133,6 +139,16 @@ class GUI:
             self.button_image_out.configure(text="ImageOut = Yes")
             self.image_out = True
 
+    def action_ai_run(self):
+        if self.ai_run :
+            self.button_ai_run.configure(text="Go")
+            self.ai_run = False
+            self.gamepad.set_button(2, 0)
+        else :
+            self.button_ai_run.configure(text="Stop")
+            self.ai_run = True
+            self.gamepad.set_button(2, 1)
+
     # take screenshot of game, run filters on image and display it. Repeat
     def draw(self):
         # if compatible game running take screenshot of it.
@@ -147,81 +163,151 @@ class GUI:
                 'RGB',
                 (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
                 bmpstr, 'raw', 'BGRX', 0, 1)
-            self.img_main = self.img_main.crop((5*self.scale, 0, 445*self.scale, 225*self.scale))
-            self.img_main = self.img_main.resize((400 * self.scale, 225 * self.scale), Image.ANTIALIAS)
-            #image = image.crop((17 * self.scale, 0 * self.scale, 183 * self.scale, 87 * self.scale))
+            self.img_main = self.img_main.crop((7*self.scale, 0, 445*self.scale, 225*self.scale))
+            self.img_main = self.img_main.resize((400 * self.scale, 225 * self.scale))
         # no game running, use screengrab
         else :
-            self.img_main = ImageGrab.grab(bbox=(0, 0, 800, 450)).resize((400*self.scale, 225*self.scale), Image.ANTIALIAS)
+            self.img_main = ImageGrab.grab(bbox=(0, 0, 800, 450)).resize((400*self.scale, 225*self.scale))
 
-        # Display main image and store backup
+        # create copy of img_main to display bounding box and output to gui
         self.img_main = ImageEnhance.Contrast(self.img_main).enhance(10.0)
         self.img_main = self.img_main.convert('1')
-        #self.img_main = self.block_threshold(self.img_main, 2, 100)
-        self.img_main = ImageTk.PhotoImage(self.img_main)
-        self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.img_main)
+        self.display = self.img_main.copy()
+        self.draw_box = ImageDraw.Draw(self.display)
+        self.draw_box.rectangle(self.get_bounding_box(), fill=None, outline='white', width=5)
+        self.display = ImageTk.PhotoImage(self.display)
+        self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.display)
+
 
         # if image_out button is checked save filtered image as incremented image files
-        if (self.image_out) :
-            if (self.image_out_time == 3) :
-                #out = self.img_main_orig
-                out = ImageEnhance.Contrast(self.img_main).enhance(10.0)
-                out = out.convert('1')
-                #out = out.filter(ImageFilter.FIND_EDGES)
-                out.save("img_cont_thresh_" + str(self.image_out_count) + ".jpg")
-                self.image_out_time = 0
-                self.image_out_count += 1
-            else :
-                self.image_out_time += 1
+        if (self.image_out) : self.output_image()
 
+        if (self.ai_run) : self.drive()
+
+        # repeat after 50ms
         self.canvas.after(50, self.draw)
 
+    # save an image every 3rd time this is called
+    def output_image(self):
+        if (self.image_out_time == 3):
+            out = self.img_main
+            out.save("img_cont_thresh_" + str(self.image_out_count) + ".jpg")
+            self.image_out_time = 0
+            self.image_out_count += 1
+        else:
+            self.image_out_time += 1
+
+
+    def drive(self):
+        self.find_driver()
+        '''
+        if self.direction_to_centre() == 1 :
+            self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x0)
+        else :
+            self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x8000)
+        '''
+        turn_degree = 0
+        if self.driver_pos[0] < 200*self.scale :
+            turn_degree = 200*self.scale - self.driver_pos[0]
+            self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x0)
+        else :
+            turn_degree = self.driver_pos[0] - 200*self.scale
+            self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x8000)
+        print(turn_degree)
+        self.canvas.after(int(turn_degree/10), self.stop_turn())
+
+
+    def stop_turn(self):
+        self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x4000)
+
+    def get_bounding_box(self):
+        bounding_box = (self.driver_pos[0] - (60 + (40 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] - (50 + (27 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[0] + (60 + (40 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] + (50 + (27 * (1 - self.driver_conf)) * self.scale))
+        return bounding_box
+
     # will be rewritten
-    def direction(self, image):
-        image = image.crop((17*self.scale, 0*self.scale, 183*self.scale, 87*self.scale))
+    def direction_to_centre(self):
+        x_width, y_height = self.img_main.size
+        image = self.img_main.crop((0, y_height/1.8, x_width, y_height))
         x_width, y_height = image.size
-        image.save("crop.jpg")
-        pix_val = list(image.getdata())
+        #image.save("crop.jpg")
+        pix_val = numpy.array(image)
         road_left = 0
         road_right = 0
-        for pix_y in range(int(y_height / 2), y_height):
+        for pix_y in range(0, y_height):
             for pix_x in range(0, x_width):
-                pixel = (pix_y * x_width) + pix_x
-                if pix_x < x_width / 2:
-                    if pix_val[pixel] < 50:
+                pixel = (pix_y, pix_x)
+                #print(str(pixel) + "," + str(self.driver_pos[0]) + "," + str(pix_val[pixel]))
+                #print(pix_val[pixel])
+                if pix_val[pixel] == False:
+                    if pix_x < self.driver_pos[0]:
                         road_left += 1
                 else:
-                    if pix_val[pixel] < 50:
                         road_right += 1
 
         if (road_left > road_right):
+            print("go_left")
             return 1
         else :
+            print("go_right")
             return 2
 
     # get largest blob from find_blobs on subsection of image source we expect driver to be in
-    def find_driver(self, image):
-        image = image.crop((130*self.scale, 80*self.scale, 280*self.scale, 174*self.scale))
-        image.save("find_driver.jpg")
-        self.find_blobs(image)
+    def find_driver(self):
+        bounding_box = self.get_bounding_box()
+        image = self.img_main.crop(bounding_box)
+        #image.save("find_driver.jpg")
+        blobs = self.find_blobs(image)
+        blob = self.find_driver_blob(blobs)
+        if blob is not None:
+            blob_pos = self.find_blob_centre(blob)
+            # adjust for bounding box
+            blob_pos = (blob_pos[0] + bounding_box[0], blob_pos[1] + bounding_box[1])
+            # adjust driver position and confidence
+            new_pos = (int((self.driver_pos[0] + blob_pos[0]) / 2), int((self.driver_pos[1] + blob_pos[1]) / 2))
+            self.driver_conf = (self.driver_conf + self.driver_pos[0] / new_pos[0]) / 2
+            self.driver_pos = new_pos
+        else :
+            # couldn't find driver, lower confidence
+            self.confidence = 0.5
+
+    def find_driver_blob(self, blobs):
+        driver = set()
+        for blob in blobs :
+            blob_width = blob[2][1] - blob[1][1]
+            blob_height = blob[2][0] - blob[1][0]
+            if blob_width > 10 * self.scale and blob_width < 30 *self.scale :
+                if blob_height > 20 * self.scale and blob_height < 60 * self.scale :
+                    return blob
+
 
     # Find contiguous areas of white in image
     def find_blobs(self, image):
         x_width, y_height = image.size
         pix_val = numpy.array(image)
-        biggest_blob = set()
+        blobs = list()
         searched = set()
         test_range = ((0, 1), (1, 0), (0, 1), (1, 0))
 
+        # Scan across image, any accessed pixel is marked as searched
+        # When white pixel is found add all surrounding unsearched pixels to blob and search queue
+        # search through rest of queue before continuing scan across image
         for pix_y in range(0, y_height) :
             for pix_x in range(0, x_width) :
                 pixel = (pix_y, pix_x)
                 if pixel not in searched:
                     searched.add(pixel)
-                    if pix_val[pixel] == 255 :
+                    if pix_val[pixel] :
                         explore_queue = list()
                         explore_queue.append(pixel)
                         blob = set()
+                        # track blob details
+                        left_most = x_width
+                        right_most = 0
+                        top_most = y_height
+                        bot_most = 0
                         blob.add(pixel)
                         while explore_queue :
                             pixel = explore_queue.pop()
@@ -232,55 +318,43 @@ class GUI:
                                     test_pixel = (test_y, test_x)
                                     if test_pixel not in searched :
                                         searched.add(test_pixel)
-                                        if pix_val[test_pixel] == 255:
+                                        if pix_val[test_pixel]:
                                             explore_queue.append(test_pixel)
                                             blob.add(test_pixel)
-                        if len(blob) > len(biggest_blob) :
-                            biggest_blob = blob
-        return biggest_blob
+                                            if (test_y > bot_most) : bot_most = test_y
+                                            if (test_y < top_most): top_most = test_y
+                                            if (test_x > right_most): right_most = test_x
+                                            if (test_x < left_most): left_most = test_x
+                        if len(blob) > 100 :
+                            blobs.append((blob, (top_most, left_most),(bot_most, right_most)))
+        return blobs
 
     # find centre pixel of a blob by average of pixel positions
-    def find_blob_centre(self, blob:set):
-        x_centre = 0
-        y_centre = 0
-        for pixel in blob :
-            y_centre += pixel[0]/len(blob)
-            x_centre += pixel[1]/len(blob)
-        return (int(y_centre), int(x_centre))
+    def find_blob_centre(self, blob):
+        y_centre = int((blob[1][1] + blob[2][1]) / 2)
+        x_centre = int((blob[1][0] + blob[2][0]) / 2)
+        return (y_centre, x_centre)
 
     # Apply threshold to image in a given block size
-    def block_threshold(self, image, block_size:int, threshold:int):
-        pix_val = numpy.array(image)
-        for y in range(0, len(pix_val)-(block_size-1), block_size) :
-            for x in range(0, len(pix_val[0])-(block_size-1), 2) :
+    def block_threshold(self, pix_val, block_size:int):
+        for y in range(-1, len(pix_val) - block_size+1, block_size) :
+            for x in range(-1, len(pix_val[0]) - block_size+1, block_size) :
                 block_pixels = list()
                 block_value = 0
                 for block_y in range(0, block_size) :
                     for block_x in range(0, block_size):
                         block_pixels.append(((y + block_y), (x + block_x)))
-                        block_value += pix_val[y + block_y][x + block_x]
-                if block_value/(block_size*block_size) > threshold :
+                        if pix_val[y + block_y][x + block_x] :
+                            block_value += 1
+                if block_value <= int((block_size*block_size)/2) :
                     for pixel in block_pixels :
-                        pix_val[pixel[0], pixel[1]] = 255
-                else:
-                    for pixel in block_pixels :
-                        pix_val[pixel[0], pixel[1]] = 0
-        image = Image.fromarray(pix_val)
-        return image
+                        pix_val[pixel] = False
+        return pix_val
 
 
 
 hwnd=win32gui.GetDesktopWindow()
 gui = GUI()
 gui.draw()
+#gui.direction_to_centre()
 gui.root.mainloop()
-
-
-im = Image.open('img_cont_thresh_5.jpg', 'r')
-im = im.crop((75, 125, 125, 175))
-im = gui.block_threshold(im, 2, 240)
-im.save('test.jpg')
-print(str(gui.find_blob_centre(gui.find_blobs(im))))
-#gui.block_threshold(im, 2, 255).save('test.jpg')
-#gui.find_driver(im)
-#print(gui.direction(im))
