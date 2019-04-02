@@ -77,7 +77,7 @@ class GUI:
 
         # Find game from list of valid window titles
         # If no game found then gui will use a screengrab of the display
-        self.games_list = ['RetroArch Genesis Plus GX v1.7.4 f5eed51', 'SomethingElse']
+        self.games_list = ['RetroArch Genesis Plus GX v1.7.4 f5eed51', 'RetroArch Genesis Plus GX v1.7.4 53e043d']
         for game in self.games_list :
             self.hwnd = win32gui.FindWindow(None, game)
             if (self.hwnd != 0) :
@@ -156,7 +156,7 @@ class GUI:
             self.dataBitMap = win32ui.CreateBitmap()
             self.dataBitMap.CreateCompatibleBitmap(self.dcObj, self.w, self.h)
             self.cDC.SelectObject(self.dataBitMap)
-            self.cDC.BitBlt((0,-86), (self.w, self.h), self.dcObj, (0,0), win32con.SRCCOPY)
+            self.cDC.BitBlt((0,(-43 * self.scale)), (self.w, self.h), self.dcObj, (0,0), win32con.SRCCOPY)
             bmpinfo = self.dataBitMap.GetInfo()
             bmpstr = self.dataBitMap.GetBitmapBits(True)
             self.img_main = Image.frombuffer(
@@ -180,7 +180,7 @@ class GUI:
         #self.img_main.save("Source_Block_Contrast.jpg")
         self.display = self.img_main.copy()
         self.draw_box = ImageDraw.Draw(self.display)
-        self.draw_box.rectangle(self.get_bounding_box(), fill=None, outline='white', width=5)
+        self.draw_box.rectangle(self.get_bounding_box(), fill=None, outline='white', width=(3 * self.scale))
         self.display = ImageTk.PhotoImage(self.display)
         self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.display)
 
@@ -236,8 +236,8 @@ class GUI:
                         , self.driver_pos[1] + (40 + (60 * (1 - self.driver_conf)) * self.scale))
         return bounding_box
 
-    # will be rewritten
-    def direction_to_centre(self):
+    # Find the largest division of black space left or right of the driver position
+    def road_left_right_of_driver(self):
         x_width, y_height = self.img_main.size
         image = self.img_main.crop((0, y_height/1.8, x_width, y_height))
         x_width, y_height = image.size
@@ -281,6 +281,9 @@ class GUI:
         else :
             # couldn't find driver, lower confidence
             self.driver_conf = self.driver_conf/2
+            if self.driver_conf < 0.1 :
+                self.driver_pos = (int((self.driver_pos[0] + (205 * self.scale)) / 2), int((self.driver_pos[1] + (155 * self.scale)) / 2))
+
 
     def find_driver_blob(self, blobs):
         driver = None
@@ -296,7 +299,7 @@ class GUI:
                     print(str(abs(blob_height - 78) / 78))
                     print(str(abs(len(blob[0]) - 2000) / 2000))
                     '''
-                    blob_conf = 1 - ((abs(blob_width - 62) / 62) + (abs(blob_height - 78) / 78) + (abs(len(blob[0]) - 2000) / 2000))
+                    blob_conf = 1 - ((abs(blob_width - (31 * self.scale)) / (31 * self.scale)) + (abs(blob_height - (39 * self.scale)) / (39 * self.scale)) + (abs(len(blob[0]) - (1000 * self.scale)) / (1000 * self.scale)))
                     if blob_conf > driver_conf :
                         driver_conf = blob_conf
                         driver = blob
