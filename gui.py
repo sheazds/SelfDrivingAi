@@ -181,6 +181,7 @@ class GUI:
         self.display = self.img_main.copy()
         self.draw_box = ImageDraw.Draw(self.display)
         self.draw_box.rectangle(self.get_bounding_box(), fill=None, outline='white', width=(3 * self.scale))
+        del self.draw_box
         self.display = ImageTk.PhotoImage(self.display)
         self.id = self.canvas.create_image(0, 0, anchor=NW, image=self.display)
 
@@ -192,7 +193,7 @@ class GUI:
         # else wait 50ms and repeat draw
         if (self.ai_run):
             self.drive()
-            self.canvas.after(10, self.draw)
+            self.canvas.after(5, self.draw)
         else:
             self.canvas.after(50, self.draw)
 
@@ -217,7 +218,8 @@ class GUI:
         else:
             turn_degree = self.driver_pos[0] - 200 * self.scale
             turn = 1
-        t = threading.Thread(target=self.turn(turn, turn_degree/400))
+        # t = threading.Thread(target=self.turn(turn, turn_degree/550))
+        t = threading.Thread(target=self.turn(turn, 0.07))
         t.start()
 
 
@@ -230,13 +232,14 @@ class GUI:
         self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x4000)
 
     def get_bounding_box(self):
-        bounding_box = (self.driver_pos[0] - (60 + (150 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] - (50 + (50 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[0] + (60 + (150 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] + (50 + (50 * (1 - self.driver_conf)) * self.scale))
+        bounding_box = (self.driver_pos[0] - (70 + (160 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] - (60 + (50 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[0] + (70 + (160 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] + (60 + (50 * (1 - self.driver_conf)) * self.scale))
         return bounding_box
 
     # Find the largest division of black space left or right of the driver position
+    # Not currently used
     def road_left_right_of_driver(self):
         x_width, y_height = self.img_main.size
         image = self.img_main.crop((0, y_height/1.8, x_width, y_height))
@@ -275,13 +278,14 @@ class GUI:
             # adjust for bounding box
             blob_pos = (blob_pos[0] + bounding_box[0], blob_pos[1] + bounding_box[1])
             # adjust driver position and confidence
-            new_pos = (int((self.driver_pos[0] + blob_pos[0]) / 2), int((self.driver_pos[1] + blob_pos[1]) / 2))
-            self.driver_conf = (self.driver_conf + self.driver_pos[0] / new_pos[0]) / 2
+            #new_pos = (int((self.driver_pos[0] + blob_pos[0]) / 2), int((self.driver_pos[1] + blob_pos[1]) / 2))
+            new_pos = blob_pos
+            self.driver_conf = (self.driver_conf + (self.driver_pos[0] / new_pos[0])) / 2
             self.driver_pos = new_pos
         else :
             # couldn't find driver, lower confidence
-            self.driver_conf = self.driver_conf/2
-            if self.driver_conf < 0.1 :
+            self.driver_conf = self.driver_conf/1.5
+            if self.driver_conf < 0.2 :
                 self.driver_pos = (int((self.driver_pos[0] + (205 * self.scale)) / 2), int((self.driver_pos[1] + (155 * self.scale)) / 2))
 
 
