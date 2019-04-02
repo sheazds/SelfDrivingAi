@@ -230,10 +230,10 @@ class GUI:
         self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x4000)
 
     def get_bounding_box(self):
-        bounding_box = (self.driver_pos[0] - (50 + (100 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] - (40 + (60 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[0] + (50 + (100 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] + (40 + (60 * (1 - self.driver_conf)) * self.scale))
+        bounding_box = (self.driver_pos[0] - (60 + (150 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] - (50 + (50 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[0] + (60 + (150 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] + (50 + (50 * (1 - self.driver_conf)) * self.scale))
         return bounding_box
 
     # Find the largest division of black space left or right of the driver position
