@@ -170,8 +170,14 @@ class GUI:
             self.img_main = ImageGrab.grab(bbox=(0, 0, 800, 450)).resize((400*self.scale, 225*self.scale))
 
         # create copy of img_main to display bounding box and output to gui
-        self.img_main = ImageEnhance.Contrast(self.img_main).enhance(10.0)
+        #self.img_main.save("Source_Base.jpg")
+        self.img_main = ImageEnhance.Contrast(self.img_main).enhance(50.0)
+        self.img_main = ImageEnhance.Brightness(self.img_main).enhance(0.9)
+        #self.img_main.save("Source_Contrast.jpg")
         self.img_main = self.img_main.convert('1')
+        #self.img_main.save("Source_Threshold.jpg")
+        #self.img_main = Image.fromarray(self.block_threshold(numpy.array(self.img_main, dtype='uint8'), 2), mode="L")
+        #self.img_main.save("Source_Block_Contrast.jpg")
         self.display = self.img_main.copy()
         self.draw_box = ImageDraw.Draw(self.display)
         self.draw_box.rectangle(self.get_bounding_box(), fill=None, outline='white', width=5)
@@ -182,10 +188,13 @@ class GUI:
         # if image_out button is checked save filtered image as incremented image files
         if (self.image_out) : self.output_image()
 
-        if (self.ai_run) : self.drive()
-
-        # repeat after 50ms
-        self.canvas.after(50, self.draw)
+        # if Go then call self driving alg and repeat soon as done
+        # else wait 50ms and repeat draw
+        if (self.ai_run):
+            self.drive()
+            self.canvas.after(10, self.draw)
+        else:
+            self.canvas.after(50, self.draw)
 
     # save an image every 3rd time this is called
     def output_image(self):
@@ -221,10 +230,10 @@ class GUI:
         self.gamepad.set_axis(pyvjoy.HID_USAGE_X, 0x4000)
 
     def get_bounding_box(self):
-        bounding_box = (self.driver_pos[0] - (60 + (50 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] - (50 + (40 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[0] + (60 + (50 * (1 - self.driver_conf)) * self.scale)
-                        , self.driver_pos[1] + (50 + (40 * (1 - self.driver_conf)) * self.scale))
+        bounding_box = (self.driver_pos[0] - (50 + (100 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] - (40 + (60 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[0] + (50 + (100 * (1 - self.driver_conf)) * self.scale)
+                        , self.driver_pos[1] + (40 + (60 * (1 - self.driver_conf)) * self.scale))
         return bounding_box
 
     # will be rewritten
@@ -258,7 +267,7 @@ class GUI:
     def find_driver(self):
         bounding_box = self.get_bounding_box()
         image = self.img_main.crop(bounding_box)
-        #image.save("find_driver.jpg")
+        # image.save("find_driver.jpg")
         blobs = self.find_blobs(image)
         blob = self.find_driver_blob(blobs)
         if blob is not None:
@@ -271,25 +280,45 @@ class GUI:
             self.driver_pos = new_pos
         else :
             # couldn't find driver, lower confidence
-            self.driver_conf = 0
+            self.driver_conf = self.driver_conf/2
 
     def find_driver_blob(self, blobs):
-        driver = set()
+        driver = None
+        driver_conf = 0
         for blob in blobs :
             blob_width = blob[2][1] - blob[1][1]
             blob_height = blob[2][0] - blob[1][0]
-            if blob_width > 10 * self.scale and blob_width < 30 *self.scale :
-                if blob_height > 20 * self.scale and blob_height < 60 * self.scale :
-                    return blob
+            if blob_width > 10 * self.scale and blob_width < 50 *self.scale :
+                if blob_height > 20 * self.scale and blob_height < 50 * self.scale :
+                    '''
+                    print(str(len(blob[0]))+","+str(blob[1])+","+str(blob[2])+","+str(blob_width)+","+str(blob_height))
+                    print(str(abs(blob_width - 62) / 62))
+                    print(str(abs(blob_height - 78) / 78))
+                    print(str(abs(len(blob[0]) - 2000) / 2000))
+                    '''
+                    blob_conf = 1 - ((abs(blob_width - 62) / 62) + (abs(blob_height - 78) / 78) + (abs(len(blob[0]) - 2000) / 2000))
+                    if blob_conf > driver_conf :
+                        driver_conf = blob_conf
+                        driver = blob
+        '''
+        pix_val = numpy.zeros((400, 400), dtype='uint8')
+        for pixel in driver[0] :
+            pix_val[pixel] = 255
+        Image.fromarray(pix_val, mode="L").save("test.jpg")
+        '''
+        return driver
+
 
 
     # Find contiguous areas of white in image
     def find_blobs(self, image):
         x_width, y_height = image.size
-        pix_val = numpy.array(image)
+        pix_val = numpy.array(image, dtype='uint8')
+        pix_val = self.block_threshold(pix_val, 2)
+
         blobs = list()
         searched = set()
-        test_range = ((0, 1), (1, 0), (0, 1), (1, 0))
+        test_range = ((0, 1), (1, 0), (0, -1), (-1, 0))
 
         # Scan across image, any accessed pixel is marked as searched
         # When white pixel is found add all surrounding unsearched pixels to blob and search queue
@@ -348,7 +377,10 @@ class GUI:
                             block_value += 1
                 if block_value <= int((block_size*block_size)/2) :
                     for pixel in block_pixels :
-                        pix_val[pixel] = False
+                        pix_val[pixel] = 0
+                else :
+                    for pixel in block_pixels :
+                        pix_val[pixel] = numpy.uint8(255)
         return pix_val
 
 
@@ -356,4 +388,5 @@ class GUI:
 hwnd=win32gui.GetDesktopWindow()
 gui = GUI()
 gui.draw()
+#gui.drive()
 gui.root.mainloop()
