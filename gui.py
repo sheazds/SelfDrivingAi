@@ -206,16 +206,18 @@ class GUI:
     # If driver is right of centre, turn left
     def drive(self):
         self.find_driver()
-        turn_degree = 0
+        #road_balance = self.road_left_right_of_driver()
         turn = 0;
-        turn_degree = 0.01 + (abs(self.driver_pos[0] - (200 * self.scale)) / (200 * self.scale) / 3)
+        turn_degree = ((0.02
+                      + (abs(self.driver_pos[0] - (200 * self.scale)) / (200 * self.scale) / 2))
+                      #+ (road_balance / 4)
+                      * self.driver_conf)
         if self.driver_pos[0] < 200 * self.scale:
             turn = 2
         else:
             turn = 1
-        print(turn_degree)
+        #print(turn_degree)
         t = threading.Thread(target=self.turn(turn, turn_degree))
-        #t = threading.Thread(target=self.turn(turn, 0.085))
         t.start()
 
     # Start turn in direction given then sleep for length given before stopping turn
@@ -248,12 +250,12 @@ class GUI:
 
     # Find contiguous areas of white in image
     def find_driver_blob(self, image):
-        if image is None :
+        x_width, y_height = image.size
+        if x_width < 10 or y_height < 10:
             return None
         pix_val = numpy.array(image, dtype='uint8')
         pix_val = self.block_threshold(pix_val, 2)
 
-        x_width, y_height = image.size
         bounding_box = self.get_bounding_box()
         searched = set()
         test_range = ((0, 1), (1, 0), (0, -1), (-1, 0))
@@ -366,12 +368,11 @@ class GUI:
                 else:
                         road_right += 1
 
+
         if (road_left > road_right):
-            print("go_left")
-            return 1
+            return 1 - (road_right/road_left)
         else :
-            print("go_right")
-            return 2
+            return 1 - (road_left/road_right)
 
     # save an image every 3rd time this is called
     def output_image(self):
