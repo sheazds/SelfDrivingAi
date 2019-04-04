@@ -21,6 +21,7 @@ class GUI:
         self.canvas.pack()
 
         #Initialize Button toggle variables
+        self.heuristic = 1
         self.ai_run = False
         self.image_out = False
         self.image_out_time = 0
@@ -34,6 +35,9 @@ class GUI:
 
         self.button_ai_run = Button(self.root, text="Go", command=self.action_ai_run)
         self.button_ai_run.place(x=200*self.scale, y=260*self.scale)
+
+        self.button_heuristic = Button(self.root, text="Heurisitc = 1", command=self.action_heuristic)
+        self.button_heuristic.place(x=250 * self.scale, y=260 * self.scale)
 
         button_right = Button(self.root, text=">")
         button_right.bind("<ButtonPress>", self.action_right_press)
@@ -153,6 +157,15 @@ class GUI:
             self.ai_run = True
             self.gamepad.set_button(2, 1)
 
+    # Toggle Go button text and control variable
+    def action_heuristic(self):
+        if self.heuristic == 1:
+            self.button_heuristic.configure(text="Heurisitc = 2")
+            self.heuristic = 2
+        else:
+            self.button_heuristic.configure(text="Heurisitc = 1")
+            self.heuristic = 1
+
     # take screenshot of game, run filters on image and display it. Repeat
     # If Run variable is set then call self driving methods
     def draw(self):
@@ -206,17 +219,27 @@ class GUI:
     # If driver is right of centre, turn left
     def drive(self):
         self.find_driver()
-        #road_balance = self.road_left_right_of_driver()
         turn = 0;
-        turn_degree = ((0.02
-                      + (abs(self.driver_pos[0] - (200 * self.scale)) / (200 * self.scale) / 2))
-                      #+ (road_balance / 4)
-                      * self.driver_conf)
-        if self.driver_pos[0] < 200 * self.scale:
-            turn = 2
-        else:
-            turn = 1
-        #print(turn_degree)
+        turn_degree = 0;
+        if self.heuristic == 1 :
+            turn_degree = ((0.02
+                          + (abs(self.driver_pos[0] - (200 * self.scale)) / (200 * self.scale) / 2))
+                          #+ (road_balance / 4)
+                          * self.driver_conf)
+            if self.driver_pos[0] < 200 * self.scale:
+                turn = 2
+            else:
+                turn = 1
+            #print(turn_degree)
+        else :
+            road_balance = self.road_left_right_of_driver() / 10
+            #print(road_balance)
+            if road_balance < 0 :
+                turn = 1
+                turn_degree = abs(road_balance)
+            else :
+                turn = 2
+
         t = threading.Thread(target=self.turn(turn, turn_degree))
         t.start()
 
@@ -351,7 +374,7 @@ class GUI:
     # Not currently used
     def road_left_right_of_driver(self):
         x_width, y_height = self.img_main.size
-        image = self.img_main.crop((0, y_height/1.8, x_width, y_height))
+        image = self.img_main.crop((0, y_height/3, x_width, y_height))
         x_width, y_height = image.size
         #image.save("crop.jpg")
         pix_val = numpy.array(image)
@@ -370,7 +393,7 @@ class GUI:
 
 
         if (road_left > road_right):
-            return 1 - (road_right/road_left)
+            return -1 * (1 - (road_right/road_left))
         else :
             return 1 - (road_left/road_right)
 
